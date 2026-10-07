@@ -104,7 +104,7 @@
   # bit 0: the cache management instructions (Zicbom) are used; the C907 has them
   gEfiMdePkgTokenSpaceGuid.PcdRiscVFeatureOverride|0xFFFFFFFFFFFFFFF1
   gEfiMdeModulePkgTokenSpaceGuid.PcdMaxVariableSize|0x2000
-  gArmTokenSpaceGuid.PcdUefiShellDefaultBootEnable|TRUE
+  gArmTokenSpaceGuid.PcdUefiShellDefaultBootEnable|FALSE
   gEfiMdePkgTokenSpaceGuid.PcdDefaultTerminalType|4
   gEfiMdePkgTokenSpaceGuid.PcdUartDefaultBaudRate|115200
   gEfiMdePkgTokenSpaceGuid.PcdUartDefaultDataBits|8
