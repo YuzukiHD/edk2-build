@@ -1,8 +1,10 @@
 # edk2-build
 
-EDK II (UEFI) for the Allwinner F101 EVB: XuanTie C907 reset into RV64, OpenSBI in M mode,
-EDK II as the S-mode payload with a UEFI Shell on the serial console. One command builds and
-packs everything.
+Build Scripts for EDK-II for YuzukiHD Boards.
+
+EDK II (UEFI) for RISC-V YuzukiHD boards: the core resets into RV64, OpenSBI runs in M mode, EDK II
+is the S-mode payload (UEFI boot menu and Shell on the serial console and the panel). One command
+builds and packs everything.
 
 ```sh
 git clone --recurse-submodules <this repo> edk2-build     # or ./build.sh submodules
@@ -19,7 +21,7 @@ Power cycle the board into FEL and run `./run.sh` (needs `xfel`); console is UAR
 | Path | What |
 |---|---|
 | `edk2/` | tianocore/edk2 (submodule) |
-| `opensbi/` | OpenSBI v1.9 with the F101 platform, branch `sun252i-f101` (submodule) |
+| `opensbi/` | OpenSBI v1.9 with the board platform, branch `sun252i-f101` (submodule) |
 | `SyterKit/` | the loader that switches the core to RV64 (submodule, `patches/` for the EVB) |
 | `F101Pkg/` | the platform: `F101.dsc`, `F101.fdf`, `F101Pkg.dec` |
 | `dts/f101-evb.dts` | device tree for OpenSBI and the payload (memory, CLINT, PLIC, UART3) |
