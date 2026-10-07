@@ -243,6 +243,8 @@
   # Console: serial through the SBI, and the graphics output when there is one
   #
   F101Pkg/Drivers/F101GopDxe/F101GopDxe.inf
+  MdeModulePkg/Universal/SmbiosDxe/SmbiosDxe.inf
+  F101Pkg/Drivers/F101SmbiosDxe/F101SmbiosDxe.inf
   MdeModulePkg/Universal/Console/ConPlatformDxe/ConPlatformDxe.inf
   MdeModulePkg/Universal/Console/ConSplitterDxe/ConSplitterDxe.inf
   MdeModulePkg/Universal/Console/GraphicsConsoleDxe/GraphicsConsoleDxe.inf

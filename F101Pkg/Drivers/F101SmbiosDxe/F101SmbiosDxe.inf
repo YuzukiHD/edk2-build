@@ -1,0 +1,40 @@
+## @file
+#  SMBIOS tables of the board (BIOS, system, processor, memory): what the boot menu shows as the
+#  device name, the CPU and the memory size.
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+##
+
+[Defines]
+  INF_VERSION                    = 1.30
+  BASE_NAME                      = F101SmbiosDxe
+  FILE_GUID                      = 6f2d4a9c-1b3e-4c58-a07d-f101c0de0a04
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = F101SmbiosEntry
+
+[Sources]
+  F101Smbios.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+
+[LibraryClasses]
+  BaseLib
+  BaseMemoryLib
+  DebugLib
+  MemoryAllocationLib
+  PcdLib
+  UefiBootServicesTableLib
+  UefiDriverEntryPoint
+
+[Protocols]
+  gEfiSmbiosProtocolGuid                ## CONSUMES
+
+[Pcd]
+  gEfiMdeModulePkgTokenSpaceGuid.PcdFirmwareVendor
+  gEfiMdeModulePkgTokenSpaceGuid.PcdFirmwareVersionString
+
+[Depex]
+  gEfiSmbiosProtocolGuid
