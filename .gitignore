@@ -1,0 +1,7 @@
+/Build/
+/out/
+/out-syter/
+/opensbi/build/
+/dts/*.dtb
+/tests/sbi_hello/hello.bin
+/tests/sbi_hello/hello.elf

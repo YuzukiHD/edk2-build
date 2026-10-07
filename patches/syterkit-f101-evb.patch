@@ -1,0 +1,70 @@
+diff --git a/boards/yuzukineko/Makefile b/boards/yuzukineko/Makefile
+index dbb8405b9..03b586fd8 100644
+--- a/boards/yuzukineko/Makefile
++++ b/boards/yuzukineko/Makefile
+@@ -6,6 +6,7 @@ ifeq ($(CONFIG_ARCH_RISCV32)$(CONFIG_DRIVER_PSRAM),yy)
+ apps-sram-y += spinor-boot
+ apps-sram-y += spinor-boot-rv64i
+ apps-sram-y += usb-boot
++apps-sram-y += usb-boot-rv64i
+ apps-sram-y += arduino-boot
+ apps-sram-y += xip-boot
+ endif
+diff --git a/boards/yuzukineko/board.dts b/boards/yuzukineko/board.dts
+index 1d0662ccf..24e3cfb22 100644
+--- a/boards/yuzukineko/board.dts
++++ b/boards/yuzukineko/board.dts
+@@ -15,14 +15,14 @@
+ 		soc0 = &soc0;
+ 		psram0 = &psram0;
+ 		intc0 = &plic0;
+-		uart1 = &uart1;
++		uart3 = &uart3;
+ 		spif0 = &spif0;
+ 		spif-nor0 = &spif_nor0;
+ 		usb0 = &usb0;
+ 	};
+ 
+ 	chosen {
+-		stdout-path = &uart1;
++		stdout-path = &uart3;
+ 	};
+ 
+ 	memory@40000000 {
+@@ -44,10 +44,10 @@
+ 		gpio-controller;
+ 		#gpio-cells = <3>;
+ 
+-		uart1_pins: uart1-pins {
++		uart3_pins: uart3-pins {
+ 			allwinner,pins =
+-				<SUNXI_GPIO_PORT_B 0 4>,
+-				<SUNXI_GPIO_PORT_B 1 4>;
++				<SUNXI_GPIO_PORT_E 8 6>,
++				<SUNXI_GPIO_PORT_E 9 6>;
+ 		};
+ 
+ 		spif_pins: spif-pins {
+@@ -101,16 +101,16 @@
+ 			status = "okay";
+ 		};
+ 
+-		uart1: serial@2500400 {
++		uart3: serial@2500c00 {
+ 			compatible = "allwinner,sunxi-uart";
+-			reg = <SUNXI_UART1_BASE 0x400>;
++			reg = <SUNXI_UART3_BASE 0x400>;
+ 			current-speed = <115200>;
+ 			clock-frequency = <24000000>;
+-			allwinner,uart-id = <1>;
+-			allwinner,clock-gate = <(SUNXI_CCU_BASE + 0x90c) 1>;
+-			allwinner,reset = <(SUNXI_CCU_BASE + 0x90c) 17>;
++			allwinner,uart-id = <3>;
++			allwinner,clock-gate = <(SUNXI_CCU_BASE + 0x90c) 3>;
++			allwinner,reset = <(SUNXI_CCU_BASE + 0x90c) 19>;
+ 			pinctrl-names = "default";
+-			pinctrl-0 = <&uart1_pins>;
++			pinctrl-0 = <&uart3_pins>;
+ 			status = "okay";
+ 		};
+ 

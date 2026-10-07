@@ -1,0 +1,66 @@
+# edk2-build
+
+EDK II (UEFI) for the Allwinner F101 EVB: XuanTie C907 reset into RV64, OpenSBI in M mode,
+EDK II as the S-mode payload with a UEFI Shell on the serial console. One command builds and
+packs everything.
+
+```sh
+git clone --recurse-submodules <this repo> edk2-build     # or ./build.sh submodules
+./build.sh all            # BaseTools, OpenSBI, device tree, SyterKit loader, EDK II, package
+# BUILD_TARGET=DEBUG ./build.sh all     # with the DEBUG() log on the serial console
+```
+
+Result in `out/f101-edk2/`: `edk2.fd`, `dtb_sbi.bin`, `loader.bin`, `run.sh`, `README.txt`.
+Power cycle the board into FEL and run `./run.sh` (needs `xfel`); console is UART3 (PE08/PE09,
+115200). A step can be run alone: `./build.sh edk2|opensbi|dtb|syterkit|package|clean`.
+
+## Contents
+
+| Path | What |
+|---|---|
+| `edk2/` | tianocore/edk2 (submodule) |
+| `opensbi/` | OpenSBI v1.9 with the F101 platform, branch `sun252i-f101` (submodule) |
+| `SyterKit/` | the loader that switches the core to RV64 (submodule, `patches/` for the EVB) |
+| `F101Pkg/` | the platform: `F101.dsc`, `F101.fdf`, `F101Pkg.dec` |
+| `dts/f101-evb.dts` | device tree for OpenSBI and the payload (memory, CLINT, PLIC, UART3) |
+| `patches/` | changes to SyterKit (console UART3, build `usb-boot-rv64i`), applied by `build.sh` |
+| `tests/sbi_hello/` | S-mode test payload (SBI console, cycle/time counters) |
+
+## Boot flow
+
+`xfel` loads three things into the 16 MiB PSRAM and starts the loader in SRAM:
+
+```
+0x40000000  edk2.fd      EDK II (SEC + compressed DXE firmware volume, about 0.7 MiB)
+0x40300000  (free)       temporary RAM of the SEC code (6 MiB: stack, HOBs, decompressed DXE)
+0x40f40000  f101-evb.dtb 256 KiB slot
+0x40f80000  fw_jump.bin  OpenSBI
+0x20000     loader.bin   SyterKit (SRAM)
+```
+
+The C907 latches RV32/RV64 at reset: the loader (RV32) programs the reset vector and the RV64
+bit and restarts the core through the RISC-V watchdog; the reset lands in a stub that jumps to
+OpenSBI. OpenSBI starts `0x40000000` in S mode with the device tree in `a1`.
+EDK II follows `OvmfPkg/RiscVVirt` (no PEI): `PlatformSecLib` reads the memory from the device
+tree, the DXE firmware volume is decompressed, DxeCore runs, BDS starts the UEFI Shell.
+
+## Facts worth knowing
+
+- **The `compatible` of the device tree must contain `allwinner,sun252i-f101`**, else OpenSBI
+  runs its generic platform: the C907 CSRs (`MHCR` and the rest, which enable the caches) are not
+  set and S mode runs about 280 times slower (a two instruction loop took 358 cycles).
+- OpenSBI needs a linker with PIE support: the Xuantie `elf-newlib` toolchain has none, the
+  `linux-glibc` one does. SyterKit is built with the newlib one.
+- Serial: `BaseSerialPortLibRiscVSbiLib` (SBI debug console) in SEC, the `...Ram` variant in DXE.
+- UEFI variables are in RAM (`EmuVariableFvbRuntimeDxe`): lost at reset.
+- `PcdFlashNvStorageVariableSize + FtwWorkingSize` must not exceed the FTW spare size, and
+  `PcdOvmfFlashNvStorageVariableBase` has to point at readable memory.
+- `DevicePathDxe` must use `UefiDevicePathLib`, the protocol based instance needs the
+  protocols the driver itself installs.
+- Host tools: the `uuid/uuid.h` header and `iasl` are taken from `../tools-local` when the
+  system has no development packages.
+
+## Not done
+
+Graphics output (the display stack of the board as a GOP driver), SD card, USB, a persistent
+variable store, RELEASE build checked on the board.

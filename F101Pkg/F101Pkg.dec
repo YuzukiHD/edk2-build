@@ -1,0 +1,11 @@
+## @file
+#  Package of the F101 platform: drivers and libraries that are not in the EDK II tree.
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+##
+
+[Defines]
+  DEC_SPECIFICATION              = 0x00010005
+  PACKAGE_NAME                   = F101Pkg
+  PACKAGE_GUID                   = 3b0c2f58-6a1e-4f0b-8f3d-f1012b7c0d02
+  PACKAGE_VERSION                = 0.1

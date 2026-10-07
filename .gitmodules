@@ -1,0 +1,10 @@
+[submodule "edk2"]
+	path = edk2
+	url = https://github.com/tianocore/edk2.git
+[submodule "opensbi"]
+	path = opensbi
+	url = https://github.com/YuzukiHD/opensbi
+	branch = sun252i-f101
+[submodule "SyterKit"]
+	path = SyterKit
+	url = https://github.com/YuzukiHD/SyterKit.git
