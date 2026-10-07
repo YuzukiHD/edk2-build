@@ -64,3 +64,10 @@ tree, the DXE firmware volume is decompressed, DxeCore runs, BDS starts the UEFI
 
 Graphics output (the display stack of the board as a GOP driver), SD card, USB, a persistent
 variable store, RELEASE build checked on the board.
+
+## License
+
+The files of this repository (build scripts, `F101Pkg` platform files, the GOP glue, device tree, tests)
+are under the BSD-2-Clause-Patent license, see `LICENSE`. The display stack in
+`F101Pkg/Drivers/F101GopDxe/sunxi/` keeps its dual license (Apache-2.0 OR GPL-2.0-or-later, per file
+header). The submodules `edk2`, `opensbi` and `SyterKit` have their own licenses.
