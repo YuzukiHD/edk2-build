@@ -99,6 +99,8 @@
   gEfiMdeModulePkgTokenSpaceGuid.PcdTurnOffUsbLegacySupport|TRUE
 
 [PcdsFixedAtBuild.common]
+  # Serial log: errors only.
+  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x80000000
   # bit 0: the cache management instructions (Zicbom) are used; the C907 has them
   gEfiMdePkgTokenSpaceGuid.PcdRiscVFeatureOverride|0xFFFFFFFFFFFFFFF1
   gEfiMdeModulePkgTokenSpaceGuid.PcdMaxVariableSize|0x2000
