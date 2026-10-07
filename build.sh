@@ -99,7 +99,7 @@ do_edk2() {
 	# shellcheck disable=SC1091
 	# edksetup.sh is not written for set -u / set -e
 	( set +eu; cd "$HERE/edk2" && . ./edksetup.sh >/dev/null 2>&1; cd "$HERE" &&
-	  build -a RISCV64 -b "$BUILD_TARGET" -t GCC -p F101Pkg/F101.dsc -n "$JOBS" )
+	  build -a RISCV64 -b "$BUILD_TARGET" -t GCC -p F101Pkg/F101.dsc -n "$JOBS" ${DEBUG_WAIT:+-D F101_DEBUG_WAIT=TRUE} ${NO_SCANOUT:+-D F101_NO_SCANOUT=TRUE} )
 }
 
 do_package() {

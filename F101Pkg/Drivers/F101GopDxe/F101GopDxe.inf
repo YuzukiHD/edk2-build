@@ -1,0 +1,97 @@
+## @file
+#  Graphics output of the F101 EVB panel: the display engine / TCON / RGB / panel / backlight
+#  stack of the board (sunxi/) behind an EFI_GRAPHICS_OUTPUT_PROTOCOL.
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+##
+
+[Defines]
+  INF_VERSION                    = 1.30
+  BASE_NAME                      = F101GopDxe
+  FILE_GUID                      = 6f2d4a9c-1b3e-4c58-a07d-f101c0de0a03
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = F101GopEntry
+
+[Sources]
+  F101Gop.c
+  edk_glue.c
+  edk_glue.h
+  f101_display.c
+  f101_display.h
+  f101_ll.h
+  libc_shim.c
+  libc_shim.h
+  dpy_os_edk2.c
+  dpy_board_f101.c
+  dpy_fix.h
+  sunxi/api/display_api.c
+  sunxi/backlight/bl_pwm.c
+  sunxi/core/dpy_atomic.c
+  sunxi/core/dpy_debug.c
+  sunxi/core/dpy_device.c
+  sunxi/core/dpy_driver_table.c
+  sunxi/core/dpy_dsi.c
+  sunxi/core/dpy_format.c
+  sunxi/core/dpy_graph.c
+  sunxi/core/dpy_objects.c
+  sunxi/core/dpy_panel.c
+  sunxi/core/dpy_pins.c
+  sunxi/core/dpy_tcon.c
+  sunxi/display-engine/de_channel.c
+  sunxi/display-engine/de_crtc.c
+  sunxi/display-engine/de_disp.c
+  sunxi/display-engine/de_drv.c
+  sunxi/display-engine/de_pipeline.c
+  sunxi/display-engine/de_plane.c
+  sunxi/display-engine/de_rcq.c
+  sunxi/display-engine/de_regs.c
+  sunxi/display-engine/de_top.c
+  sunxi/display-engine/modules/de_bld.c
+  sunxi/display-engine/modules/de_ccsc.c
+  sunxi/display-engine/modules/de_csc.c
+  sunxi/display-engine/modules/de_dcsc.c
+  sunxi/display-engine/modules/de_dither.c
+  sunxi/display-engine/modules/de_gamma.c
+  sunxi/display-engine/modules/de_gsu.c
+  sunxi/display-engine/modules/de_ovl.c
+  sunxi/display-engine/modules/de_scaler_coef.c
+  sunxi/display-engine/modules/de_vsu.c
+  sunxi/display-engine/soc/de_sun252iw2.c
+  sunxi/encoder/encoder_common.c
+  sunxi/encoder/rgb/rgb.c
+  sunxi/panel/panel_cmdseq.c
+  sunxi/panel/panel_simple.c
+  sunxi/soc/soc_sun252iw2.c
+  sunxi/tcon/tcon_clk.c
+  sunxi/tcon/tcon_lcd.c
+  sunxi/tcon/tcon_top.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+
+[LibraryClasses]
+  BaseLib
+  BaseMemoryLib
+  CacheMaintenanceLib
+  DebugLib
+  DevicePathLib
+  DxeServicesTableLib
+  FrameBufferBltLib
+  MemoryAllocationLib
+  TimerLib
+  UefiBootServicesTableLib
+  UefiDriverEntryPoint
+
+[Protocols]
+  gEfiDevicePathProtocolGuid                    ## PRODUCES
+  gEfiGraphicsOutputProtocolGuid                ## PRODUCES
+
+[Depex]
+  gEfiTimerArchProtocolGuid AND gEfiCpuArchProtocolGuid
+
+[BuildOptions]
+  # the display stack is written against the C library headers: it is built with them, and
+  # dpy_fix.h (after AutoGen.h) removes the macros of the two header sets that clash
+  GCC:*_*_*_CC_FLAGS = -I$(MODULE_DIR) -I$(MODULE_DIR)/sunxi -I$(MODULE_DIR)/sunxi/include -include $(MODULE_DIR)/dpy_fix.h -DCONFIG_DISPLAY_DE=1 -DCONFIG_DISPLAY_TCON_LCD=1 -DCONFIG_DISPLAY_ENCODER_RGB=1 -DCONFIG_DISPLAY_PANEL_SIMPLE=1 -DCONFIG_DISPLAY_BACKLIGHT_PWM=1 -DCONFIG_DISPLAY_SOC_SUN252IW2=1 -Wno-error -Wno-unused -Wno-format -Wno-missing-field-initializers

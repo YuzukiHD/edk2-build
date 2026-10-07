@@ -28,11 +28,23 @@
   DEFINE NETWORK_TLS_ENABLE      = FALSE
   DEFINE DEBUG_ON_SERIAL_PORT    = TRUE
   DEFINE BUILD_SHELL             = TRUE
+  # the SEC code waits for a debugger (set mDebugWait to 0)
+  DEFINE F101_DEBUG_WAIT         = FALSE
+  # experiment: the display engine does not scan out
+  DEFINE F101_NO_SCANOUT         = FALSE
+  DEFINE F101_FLAGS              = -DF101_BUILD
+!if $(F101_DEBUG_WAIT) == TRUE
+  DEFINE F101_FLAGS              = $(F101_FLAGS) -DF101_DEBUG_WAIT
+!endif
+!if $(F101_NO_SCANOUT) == TRUE
+  DEFINE F101_FLAGS              = $(F101_FLAGS) -DF101_NO_SCANOUT
+!endif
 
 !include MdePkg/MdeLibs.dsc.inc
 
 [BuildOptions]
   GCC:RELEASE_*_*_CC_FLAGS       = -DMDEPKG_NDEBUG
+  GCC:*_*_*_CC_FLAGS             = $(F101_FLAGS)
 
 [BuildOptions.common.EDKII.DXE_RUNTIME_DRIVER]
   GCC: *_*_*_DLINK_FLAGS = -z common-page-size=0x1000
@@ -41,7 +53,7 @@
 
 [LibraryClasses.common]
   SerialPortLib|MdePkg/Library/BaseSerialPortLibRiscVSbiLib/BaseSerialPortLibRiscVSbiLibRam.inf
-  PlatformSecLib|OvmfPkg/RiscVVirt/Library/PlatformSecLib/PlatformSecLib.inf
+  PlatformSecLib|F101Pkg/Library/PlatformSecLib/PlatformSecLib.inf
   PlatformFvbLib|OvmfPkg/Library/PlatformFvbLibNull/PlatformFvbLibNull.inf
   PlatformBootManagerLib|ArmPkg/Library/PlatformBootManagerLib/PlatformBootManagerLib.inf
   PlatformHookLib|MdeModulePkg/Library/BasePlatformHookLibNull/BasePlatformHookLibNull.inf
@@ -87,6 +99,8 @@
   gEfiMdeModulePkgTokenSpaceGuid.PcdTurnOffUsbLegacySupport|TRUE
 
 [PcdsFixedAtBuild.common]
+  # bit 0: the cache management instructions (Zicbom) are used; the C907 has them
+  gEfiMdePkgTokenSpaceGuid.PcdRiscVFeatureOverride|0xFFFFFFFFFFFFFFF1
   gEfiMdeModulePkgTokenSpaceGuid.PcdMaxVariableSize|0x2000
   gArmTokenSpaceGuid.PcdUefiShellDefaultBootEnable|TRUE
   gEfiMdePkgTokenSpaceGuid.PcdDefaultTerminalType|4
@@ -225,6 +239,7 @@
   #
   # Console: serial through the SBI, and the graphics output when there is one
   #
+  F101Pkg/Drivers/F101GopDxe/F101GopDxe.inf
   MdeModulePkg/Universal/Console/ConPlatformDxe/ConPlatformDxe.inf
   MdeModulePkg/Universal/Console/ConSplitterDxe/ConSplitterDxe.inf
   MdeModulePkg/Universal/Console/GraphicsConsoleDxe/GraphicsConsoleDxe.inf
