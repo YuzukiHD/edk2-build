@@ -20,7 +20,6 @@
 #include <Library/DxeServicesTableLib.h>
 #include <Library/FrameBufferBltLib.h>
 #include <Library/MemoryAllocationLib.h>
-#include <Library/TimerLib.h>
 #include <Library/UefiBootServicesTableLib.h>
 
 #include "f101_display.h"
@@ -36,18 +35,8 @@ typedef struct {
   EFI_GRAPHICS_OUTPUT_PROTOCOL            Gop;
   EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE       Mode;
   EFI_GRAPHICS_OUTPUT_MODE_INFORMATION    Info;
-  FRAME_BUFFER_CONFIGURE                  *BltConfig[2];
+  FRAME_BUFFER_CONFIGURE                  *BltConfig;
   UINTN                                   BltConfigSize;
-  UINT8                                   *Buf[2];
-  BOOLEAN                                 Single;      // one buffer only: drawn in place
-  UINTN                                   Front;       // the buffer being scanned out
-  UINTN                                   DirtyFirst;  // rows drawn into the back buffer, not shown yet
-  UINTN                                   DirtyEnd;
-  UINTN                                   StaleFirst;  // rows the back buffer lacks since the last flip
-  UINTN                                   StaleEnd;
-  UINT64                                  FlipTime;    // ns, when the last flip was submitted
-  EFI_EVENT                               PresentTimer;
-  EFI_EVENT                               ExitEvent;
   UINT32                                  Width;
   UINT32                                  Height;
   UINTN                                   Stride;
@@ -100,132 +89,24 @@ MapRegisters (
   }
 }
 
-//
-// Double buffering: drawing goes to the back buffer; a timer flips the display engine to it, so a
-// frame is never scanned out half drawn. The buffer that was shown before lacks the rows drawn
-// since, they are copied over (from the buffer on screen) before the next drawing touches it.
-//
-#define FLIP_LATCH_NS  20000000ULL   // a flip is taken over by the engine within one frame (17 ms)
-#define PRESENT_100NS  330000ULL     // 33 ms
-
-STATIC
-UINT64
-NowNs (
-  VOID
-  )
-{
-  return GetTimeInNanoSecond (GetPerformanceCounter ());
-}
-
 STATIC
 VOID
-AddRows (
-  IN OUT UINTN  *First,
-  IN OUT UINTN  *End,
-  IN     UINTN  Y,
-  IN     UINTN  Rows
+CleanRows (
+  IN UINTN  FirstRow,
+  IN UINTN  Rows
   )
 {
-  UINTN  E;
+  UINT8  *Base = (UINT8 *)(UINTN)mGop.Mode.FrameBufferBase;
 
-  if (Y >= mGop.Height) {
+  if (FirstRow >= mGop.Height) {
     return;
   }
 
-  E = MIN (Y + Rows, (UINTN)mGop.Height);
-  if (*First >= *End) {
-    *First = Y;
-    *End   = E;
-  } else {
-    *First = MIN (*First, Y);
-    *End   = MAX (*End, E);
-  }
-}
-
-STATIC
-VOID
-SyncBack (
-  VOID
-  )
-{
-  UINTN  Back = 1 - mGop.Front;
-  UINT64 Now;
-
-  if (mGop.StaleFirst >= mGop.StaleEnd) {
-    return;
+  if (FirstRow + Rows > mGop.Height) {
+    Rows = mGop.Height - FirstRow;
   }
 
-  Now = NowNs ();
-  if (Now < mGop.FlipTime + FLIP_LATCH_NS) {
-    MicroSecondDelay ((UINTN)((mGop.FlipTime + FLIP_LATCH_NS - Now) / 1000));
-  }
-
-  CopyMem (
-    mGop.Buf[Back] + mGop.StaleFirst * mGop.Stride,
-    mGop.Buf[mGop.Front] + mGop.StaleFirst * mGop.Stride,
-    (mGop.StaleEnd - mGop.StaleFirst) * mGop.Stride
-    );
-  mGop.StaleFirst = mGop.StaleEnd = 0;
-}
-
-STATIC
-VOID
-Present (
-  VOID
-  )
-{
-  UINTN  Back = 1 - mGop.Front;
-
-  if (mGop.DirtyFirst >= mGop.DirtyEnd) {
-    return;
-  }
-
-  SyncBack ();
-  WriteBackDataCacheRange (
-    mGop.Buf[Back] + mGop.DirtyFirst * mGop.Stride,
-    (mGop.DirtyEnd - mGop.DirtyFirst) * mGop.Stride
-    );
- #ifndef F101_NO_SCANOUT
-  f101_display_show ((UINTN)mGop.Buf[Back], (UINT32)mGop.Stride, mGop.Width, mGop.Height);
- #endif
-  mGop.FlipTime    = NowNs ();
-  mGop.Front       = Back;
-  mGop.StaleFirst  = mGop.DirtyFirst;
-  mGop.StaleEnd    = mGop.DirtyEnd;
-  mGop.DirtyFirst  = mGop.DirtyEnd = 0;
-}
-
-STATIC
-VOID
-EFIAPI
-PresentTimerNotify (
-  IN EFI_EVENT  Event,
-  IN VOID       *Context
-  )
-{
-  Present ();
-}
-
-//
-// The operating system draws into Mode.FrameBufferBase (buffer 0) itself: show the last picture
-// there and stop flipping.
-//
-STATIC
-VOID
-EFIAPI
-ExitBootServicesNotify (
-  IN EFI_EVENT  Event,
-  IN VOID       *Context
-  )
-{
-  gBS->SetTimer (mGop.PresentTimer, TimerCancel, 0);
-  Present ();
-  if (mGop.Front != 0) {
-    CopyMem (mGop.Buf[0], mGop.Buf[1], mGop.Stride * mGop.Height);
-    WriteBackDataCacheRange (mGop.Buf[0], mGop.Stride * mGop.Height);
-    f101_display_show ((UINTN)mGop.Buf[0], (UINT32)mGop.Stride, mGop.Width, mGop.Height);
-    mGop.Front = 0;
-  }
+  WriteBackDataCacheRange (Base + FirstRow * mGop.Stride, Rows * mGop.Stride);
 }
 
 STATIC
@@ -284,29 +165,9 @@ GopBlt (
   IN UINTN                               Delta
   )
 {
-  EFI_STATUS  Status;
-  EFI_TPL     OldTpl;
-
-  OldTpl = gBS->RaiseTPL (TPL_HIGH_LEVEL);
-  gBS->RestoreTPL (OldTpl);
-  if (OldTpl < TPL_CALLBACK) {
-    OldTpl = gBS->RaiseTPL (TPL_CALLBACK);
-  }
-
-  if (mGop.Single) {
-    Status = FrameBufferBlt (mGop.BltConfig[0], BltBuffer, BltOperation, SourceX, SourceY, DestinationX, DestinationY, Width, Height, Delta);
-    if (!EFI_ERROR (Status) && (BltOperation != EfiBltVideoToBltBuffer) && (DestinationY < mGop.Height)) {
-      WriteBackDataCacheRange (mGop.Buf[0] + DestinationY * mGop.Stride, MIN (Height, mGop.Height - DestinationY) * mGop.Stride);
-    }
-
-    gBS->RestoreTPL (OldTpl);
-    return Status;
-  }
-
-  SyncBack ();
-
+  EFI_STATUS    Status;
   Status = FrameBufferBlt (
-             mGop.BltConfig[1 - mGop.Front],
+             mGop.BltConfig,
              BltBuffer,
              BltOperation,
              SourceX,
@@ -317,12 +178,23 @@ GopBlt (
              Height,
              Delta
              );
-  if (!EFI_ERROR (Status) && (BltOperation != EfiBltVideoToBltBuffer)) {
-    AddRows (&mGop.DirtyFirst, &mGop.DirtyEnd, DestinationY, Height);
+  if (EFI_ERROR (Status)) {
+    return Status;
   }
 
-  gBS->RestoreTPL (OldTpl);
-  return Status;
+  switch (BltOperation) {
+    case EfiBltVideoFill:
+    case EfiBltBufferToVideo:
+      CleanRows (DestinationY, Height);
+      break;
+    case EfiBltVideoToVideo:
+      CleanRows (DestinationY, Height);
+      break;
+    default:
+      break;
+  }
+
+  return EFI_SUCCESS;
 }
 
 EFI_STATUS
@@ -335,9 +207,8 @@ F101GopEntry (
   EFI_STATUS            Status;
   UINT32                Width, Height, Hz;
   UINTN                 Size;
-  EFI_PHYSICAL_ADDRESS  Fb, Fb2;
+  EFI_PHYSICAL_ADDRESS  Fb;
   EFI_HANDLE            Handle;
-  UINTN                 Index;
 
   MapRegisters ();
 
@@ -361,22 +232,6 @@ F101GopEntry (
   }
 
   ZeroMem ((VOID *)(UINTN)Fb, Size);
-  mGop.Buf[0] = (UINT8 *)(UINTN)Fb;
-  mGop.Front  = 0;
-
-  Fb2    = 0;
-  Status = gBS->AllocatePages (AllocateAnyPages, EfiBootServicesData, EFI_SIZE_TO_PAGES (Size), &Fb2);
-  if (EFI_ERROR (Status)) {
-    //
-    // Not enough memory for a second buffer: draw into the one on screen.
-    //
-    DEBUG ((DEBUG_WARN, "F101Gop: no back buffer (%r), single buffered\n", Status));
-    mGop.Buf[1] = mGop.Buf[0];
-    mGop.Single = TRUE;
-  } else {
-    ZeroMem ((VOID *)(UINTN)Fb2, Size);
-    mGop.Buf[1] = (UINT8 *)(UINTN)Fb2;
-  }
   DEBUG ((DEBUG_INFO, "F101Gop: frame buffer %lx - %lx (%u pages)\n", Fb, Fb + Size - 1, (UINT32)EFI_SIZE_TO_PAGES (Size)));
 
   mGop.Info.Version              = 0;
@@ -397,47 +252,33 @@ F101GopEntry (
   mGop.Gop.Blt       = GopBlt;
   mGop.Gop.Mode      = &mGop.Mode;
 
-  for (Index = 0; Index < 2; Index++) {
-    mGop.BltConfigSize = 0;
-    Status             = FrameBufferBltConfigure (mGop.Buf[Index], &mGop.Info, mGop.BltConfig[Index], &mGop.BltConfigSize);
-    if (Status == RETURN_BUFFER_TOO_SMALL) {
-      mGop.BltConfig[Index] = AllocatePool (mGop.BltConfigSize);
-      if (mGop.BltConfig[Index] == NULL) {
-        return EFI_OUT_OF_RESOURCES;
-      }
-
-      Status = FrameBufferBltConfigure (mGop.Buf[Index], &mGop.Info, mGop.BltConfig[Index], &mGop.BltConfigSize);
+  mGop.BltConfigSize = 0;
+  Status             = FrameBufferBltConfigure ((VOID *)(UINTN)Fb, &mGop.Info, mGop.BltConfig, &mGop.BltConfigSize);
+  if (Status == RETURN_BUFFER_TOO_SMALL) {
+    mGop.BltConfig = AllocatePool (mGop.BltConfigSize);
+    if (mGop.BltConfig == NULL) {
+      return EFI_OUT_OF_RESOURCES;
     }
 
-    if (EFI_ERROR (Status)) {
-      DEBUG ((DEBUG_ERROR, "F101Gop: FrameBufferBltConfigure: %r\n", Status));
-      return Status;
-    }
+    Status = FrameBufferBltConfigure ((VOID *)(UINTN)Fb, &mGop.Info, mGop.BltConfig, &mGop.BltConfigSize);
   }
 
-  WriteBackDataCacheRange (mGop.Buf[0], Size);
-  WriteBackDataCacheRange (mGop.Buf[1], Size);
- #ifndef F101_NO_SCANOUT
-  if (f101_display_show ((UINTN)mGop.Buf[0], (UINT32)mGop.Stride, Width, Height) != 0) {
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "F101Gop: FrameBufferBltConfigure: %r\n", Status));
+    return Status;
+  }
+
+  WriteBackDataCacheRange ((VOID *)(UINTN)Fb, Size);
+ #ifdef F101_NO_SCANOUT
+  DEBUG ((DEBUG_INFO, "F101Gop: scan out disabled (experiment)\n"));
+ #else
+  if (f101_display_show ((UINTN)Fb, (UINT32)mGop.Stride, Width, Height) != 0) {
     DEBUG ((DEBUG_ERROR, "F101Gop: the frame buffer was not accepted\n"));
     return EFI_DEVICE_ERROR;
   }
 
   f101_display_backlight (255);
  #endif
-
-  Status = gBS->CreateEvent (EVT_TIMER | EVT_NOTIFY_SIGNAL, TPL_CALLBACK, PresentTimerNotify, NULL, &mGop.PresentTimer);
-  if (!EFI_ERROR (Status)) {
-    Status = gBS->SetTimer (mGop.PresentTimer, TimerPeriodic, PRESENT_100NS);
-  }
-
-  if (!EFI_ERROR (Status)) {
-    Status = gBS->CreateEvent (EVT_SIGNAL_EXIT_BOOT_SERVICES, TPL_NOTIFY, ExitBootServicesNotify, NULL, &mGop.ExitEvent);
-  }
-
-  if (EFI_ERROR (Status)) {
-    return Status;
-  }
 
   Handle = NULL;
   Status = gBS->InstallMultipleProtocolInterfaces (

@@ -78,7 +78,6 @@
   DebugLib
   DevicePathLib
   DxeServicesTableLib
-  TimerLib
   FrameBufferBltLib
   MemoryAllocationLib
   TimerLib
