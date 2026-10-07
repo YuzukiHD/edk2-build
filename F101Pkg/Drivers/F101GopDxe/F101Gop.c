@@ -45,6 +45,8 @@ typedef struct {
   UINTN                                   DirtyEnd;
   UINTN                                   StaleFirst;  // rows the back buffer lacks since the last flip
   UINTN                                   StaleEnd;
+  UINT64                                  LastBlt;     // ns, last drawing
+  UINT64                                  DirtySince;  // ns, first drawing not shown yet
   UINT64                                  FlipTime;    // ns, when the last flip was submitted
   EFI_EVENT                               PresentTimer;
   EFI_EVENT                               ExitEvent;
@@ -106,7 +108,9 @@ MapRegisters (
 // since, they are copied over (from the buffer on screen) before the next drawing touches it.
 //
 #define FLIP_LATCH_NS  20000000ULL   // a flip is taken over by the engine within one frame (17 ms)
-#define PRESENT_100NS  330000ULL     // 33 ms
+#define PRESENT_100NS  100000ULL     // timer period 10 ms
+#define IDLE_NS        8000000ULL    // flip once the drawing paused this long
+#define MAX_AGE_NS     100000000ULL  // or the picture is this old
 
 STATIC
 UINT64
@@ -203,7 +207,15 @@ PresentTimerNotify (
   IN VOID       *Context
   )
 {
-  Present ();
+  UINT64  Now = NowNs ();
+
+  //
+  // Let a burst of drawing finish (every drawing right after a flip waits for the engine to
+  // take it over); show the picture when it pauses or has waited long enough.
+  //
+  if ((Now - mGop.LastBlt >= IDLE_NS) || (Now - mGop.DirtySince >= MAX_AGE_NS)) {
+    Present ();
+  }
 }
 
 //
@@ -318,7 +330,12 @@ GopBlt (
              Delta
              );
   if (!EFI_ERROR (Status) && (BltOperation != EfiBltVideoToBltBuffer)) {
+    if (mGop.DirtyFirst >= mGop.DirtyEnd) {
+      mGop.DirtySince = NowNs ();
+    }
+
     AddRows (&mGop.DirtyFirst, &mGop.DirtyEnd, DestinationY, Height);
+    mGop.LastBlt = NowNs ();
   }
 
   gBS->RestoreTPL (OldTpl);
